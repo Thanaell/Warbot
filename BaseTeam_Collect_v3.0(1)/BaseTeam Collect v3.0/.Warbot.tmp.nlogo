@@ -1,4 +1,4 @@
-__includes [ "reds.nls" "greens.nls" "blues.nls" ]
+__includes [ "parameters.nls" "reds.nls" "greens.nls" "blues.nls" ]
 
 ; definition des especes
 breed [ Explorers Explorer ]
@@ -71,7 +71,9 @@ Perceptions-own [ agt my-range ]
 ; les variables specifiques aux graines
 ;
 Seeds-own [ age ]
-Burgers-own [ burger-type ]
+Burgers-own [ burger-breed           ;; l'espèce de l'agent qui l'a créé
+              who-id                 ;; l'identifiant du robot qui l'a créé
+            ]
 
 ;
 ; les variables globales
@@ -82,6 +84,8 @@ globals [ victoire                     ;; 1 si victoire des verts / 2 si victoir
           energy_red                   ;; la quantite d'energie de l'equipe rouge
           energy_blue                  ;; la quantite d'energie de l'equipe rouge
 
+          wall-cost                    ;; le cout de fabrication d'un mur
+          wall-nrj                     ;; l'energie initiale d'un mur
           seed-cost                    ;; le cout d'une graine
           max-seeds                    ;; la quantite max de graines par patch
           maturation-time              ;; le temps de maturation des graines
@@ -143,7 +147,6 @@ globals [ victoire                     ;; 1 si victoire des verts / 2 si victoir
           wild-burger-max-nrj          ;; l'energie maximale d'un burger sauvage
           seeded-burger-min-nrj        ;; l'energie minimale d'un burger cultive
           seeded-burger-max-nrj        ;; l'energie maximale d'un burger cultive
-          burger-maturation-time       ;; le temps de maturation d'une graine de burger
 ]
 
 ;
@@ -152,94 +155,10 @@ globals [ victoire                     ;; 1 si victoire des verts / 2 si victoir
 to setup [ config ]
   ; efface tout
   clear-all
+  init-parameters
 
   ; paramètres generaux
   set victoire 0
-  set duree 25000
-
-  ; definit les formes par defaut des agents
-  set-default-shape Perceptions "circle"
-  set-default-shape Bases "house"
-  set-default-shape Explorers "explorer"
-  set-default-shape RocketLaunchers "rocket launcher"
-  set-default-shape Harvesters "harvester"
-  set-default-shape Burgers "hamburger"
-  set-default-shape Walls "box"
-
-  ; initialise les variables qui definissent les parametres du jeu
-
-  ; parametres des bases
-  set base-nrj 50000
-  set base-perception 10
-  set base-speed 0
-  set base-nb-missiles 1000
-  set base-max-missiles 1000000
-  set base-nb-fafs 20
-  set base-max-fafs 100
-  set base-waiting 1
-  set base-burgers 100
-
-  ; parametres des rocket-launchers
-  set rocket-launcher-cost 6000
-  set rocket-launcher-nrj 4000
-  set rocket-launcher-perception 5
-  set rocket-launcher-speed 0.5
-  set rocket-launcher-metabolism 0.1
-  set rocket-launcher-nb-missiles 100
-  set rocket-launcher-max-missiles 1000
-  set rocket-launcher-nb-fafs 2
-  set rocket-launcher-max-fafs 5
-  set rocket-launcher-waiting 5
-  set rocket-launcher-burgers 10
-
-  ; parametres des explorers
-  set explorer-cost 1500
-  set explorer-nrj 1000
-  set explorer-perception 10
-  set explorer-speed 1
-  set explorer-metabolism 0.1
-  set explorer-burgers 10
-
-  ; parametres des harvesters
-  set harvester-cost 3000
-  set harvester-nrj 2000
-  set harvester-perception 3
-  set harvester-speed 0.25
-  set harvester-metabolism 0.1
-  set harvester-burgers 10
-
-  ; parametres des missiles
-  set missile-cost 1
-  set missile-range 10
-  set missile-robot-damage 10
-  set missile-base-damage 2
-  set missile-speed 1
-
-  ; parametres des faf
-  set faf-cost 50
-  set faf-range 20
-  set faf-robot-damage 200
-  set faf-base-damage 50
-  set faf-speed 1
-
-  ; parametre des collisions
-  set collision-damage 1000
-
-  ; parametres des burgers
-  set burger-quantity 100
-  set burger-periodicity 2000
-  set wild-burger-min-nrj 50
-  set wild-burger-max-nrj 100
-  set seeded-burger-min-nrj 100
-  set seeded-burger-max-nrj 150
-  set burger-maturation-time 200
-  set burger-decay 0.1
-
-  ; parametres des graines
-  set seed-cost 20
-  set max-seeds 5
-  set maturation-time 1000
-
   ; cree 2 bases de chaque couleur
   new-Base red green blue 0 10
   new-Base red green blue 0 -10
@@ -267,7 +186,7 @@ to setup [ config ]
   ]
 
   ; cree des obstacles
-  new-walls
+  new-random-walls
 
   ; ajoute de la nourriture
   repeat 3 [ new-random-burgers burger-quantity ]
@@ -394,7 +313,7 @@ to go
 end
 
 to-report compute-energy [ c ]
-  report sum [energy] of Bases with [ color = c ] +
+  report round (sum [energy] of Bases with [ color = c ] +
   sum [energy] of Explorers with [ color = c ] +
   sum [energy] of Harvesters with [ color = c ] +
   sum [carrying-food?] of Harvesters with [ color = c ] +
@@ -402,7 +321,7 @@ to-report compute-energy [ c ]
   sum [nb-missiles * missile-cost] of RocketLaunchers with [ color = c ] +
   sum [nb-fafs * faf-cost] of RocketLaunchers with [ color = c ] +
   sum [nb-missiles * missile-cost] of bases with [ color = c ] +
-  sum [nb-fafs * faf-cost] of Bases with [ color = c ]
+  sum [nb-fafs * faf-cost] of Bases with [ color = c ])
 end
 
 to update_energy_watches
@@ -471,54 +390,76 @@ to new-random-burgers [ n ]
   let x random-xcor
   let y random-ycor
   ; cree n burgers autour de la position choisie
-  create-burgers n [ init-burgers x y ]
+  create-burgers n [ init-burger x y wild-burger-min-nrj wild-burger-max-nrj Burgers -1 ]
   ; cree des burgers à la même position relative pour les 2 autres bases
-  create-burgers n [ init-burgers x + 40 y ]
-  create-burgers n [ init-burgers x + 80 y ]
+  create-burgers n [ init-burger x + 40 y wild-burger-min-nrj wild-burger-max-nrj Burgers -1 ]
+  create-burgers n [ init-burger x + 80 y wild-burger-min-nrj wild-burger-max-nrj Burgers -1 ]
 end
 
 
 ;
 ; cree 'n' burgers à la position de l'agent
 ;
-to new-burgers [ x y n ]
+to new-burgers [ x y n min-nrj max-nrj bb wi ]
   ; cree n burgers autour de l'agent
-  hatch-Burgers n [ init-burgers x y ]
+  hatch-Burgers n [ init-burger x y min-nrj max-nrj bb wi ]
 end
 
-to init-burgers [ x y ]
+to init-burger [ x y min-nrj max-nrj bb wi ]
   ; positions etalees autour du point choisi
   setxy x y
+  set burger-breed bb
+  set who-id wi
   set label ""
   set heading random 360
   fd random 3
   set size 1
   ; energie entre 50 et 100
-  set energy wild-burger-min-nrj + random (wild-burger-max-nrj - wild-burger-min-nrj)
+  set energy min-nrj + random (max-nrj + 1 - min-nrj)
+;  show word word burger-breed " / " who-id
 end
 
 ;
 ; Creation de nouveaux obstacles
 ;
-to new-walls
-  ; 100 murs crees aleatoirement
+to new-random-walls
+  ; 180 murs crees aleatoirement
   create-Walls 60 [
-    ;; besoin de 10 tirs pour les detruire
-    set energy 1000
-    set color gray
-    setxy random-xcor random-ycor
-    ;; crée deux autres murs symétriques
-    hatch-Walls 1 [
-      set energy 1000
-      set color gray
-      setxy [xcor] of myself + 40 [ycor] of myself
-    ]
-    hatch-Walls 1 [
-      set energy 1000
-      set color gray
-      setxy [xcor] of myself + 80 [ycor] of myself
-    ]
+    let x random-xcor
+    let y random-ycor
+    ;; crée 3 murs symétriques
+    init-wall x y
+    init-wall x + 40 y
+    init-wall x + 80 y
   ]
+end
+
+to new-wall [ n a ]
+  ; on verifie que l'agent a suffisamment d'energie
+  if ([energy] of a > n * wall-cost) [
+    ; on cree 'n' fois 1 agent
+    repeat n [
+      ; creation de l'agent
+      hatch-Walls 1 [
+        ; meme couleur et orientation que l'agent parent
+        set color [color] of a
+        set size 1
+        ; on decale le nouvel agent
+        fd 1
+        ; initialisation de l'energie, du rayon de perception, de la vitesse
+        set energy wall-nrj
+      ]
+    ]
+    ; decremente l'energie de l'agent createur
+    ask a [ set energy energy - n * explorer-cost ]
+  ]
+end
+
+to init-wall [ x y ]
+  setxy x y
+  set energy wall-nrj
+  set color gray
+  set size 1
 end
 
 ;
@@ -722,7 +663,7 @@ to display-label
                   [ if (display? = "carrying-food?")
                     [ ifelse ((breed = Bases) or (breed = RocketLaunchers))
                       [ set label "" ]
-                      [ set label carrying-food? ]
+                      [ set label round carrying-food? ]
                     ]
                   ]
                 ]
@@ -741,7 +682,7 @@ end
 to mort
   if (energy <= 0) [
     ; crée des burgers en mourant
-    new-burgers xcor ycor death-burgers
+    new-burgers xcor ycor death-burgers wild-burger-min-nrj wild-burger-max-nrj breed who
     ; supprime le cercle de perception
     ask percept [die]
     ; meurt
@@ -862,11 +803,7 @@ to grow-seed
   set age age + 1
   set color scale-color friend age 0 maturation-time
   if (age = maturation-time) [
-    hatch-Burgers 1 [
-      ; energie entre 100 et 150
-      set energy seeded-burger-min-nrj + random (seeded-burger-max-nrj - seeded-burger-min-nrj)
-      set label ""
-    ]
+    new-burgers xcor ycor 1 seeded-burger-min-nrj seeded-burger-max-nrj breed who
     die
   ]
 end
@@ -928,7 +865,9 @@ to forward-move [ d ]
       ; sinon, il y a collision avec dégâts sur l'obstacle et sur le robot
       [
         ask a [ set energy energy - collision-damage ]
-        set energy energy - collision-damage
+        ifelse ([breed] of a = Bases)
+        [ set energy 0 ]
+        [ set energy energy - collision-damage ]
       ]
     ]
   ]
@@ -1312,7 +1251,7 @@ MONITOR
 70
 378
 Base R1
-[energy] of turtle 0
+round [energy] of turtle 0
 3
 1
 11
@@ -1323,7 +1262,7 @@ MONITOR
 70
 424
 Base R2
-[energy] of turtle 2
+round [energy] of turtle 2
 3
 1
 11
@@ -1345,7 +1284,7 @@ MONITOR
 141
 424
 Base G2
-[energy] of turtle 6
+round [energy] of turtle 6
 17
 1
 11
@@ -1356,7 +1295,7 @@ MONITOR
 141
 378
 Base G1
-[energy] of turtle 4
+round [energy] of turtle 4
 17
 1
 11
@@ -1410,7 +1349,7 @@ MONITOR
 212
 378
 Base B1
-[energy] of turtle 8
+round [energy] of turtle 8
 17
 1
 11
@@ -1421,7 +1360,7 @@ MONITOR
 212
 424
 Base B2
-[energy] of turtle 10
+round [energy] of turtle 10
 17
 1
 11
