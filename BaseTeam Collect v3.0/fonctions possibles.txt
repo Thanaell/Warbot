@@ -1,0 +1,13 @@
+Au départ on crée beaucoup d'Harv. ensuite en atteignant un seuil on crée bcp de LanceurMis et on les envoie sur l'advresaire
+
+On distinge 2 types de harv. : proches (limités à un nombre particulier et peuvent pas dépasser une certaine distance) : s'occupe de la plantation
+			       loin : ceux qui cherchent loin la bouffe pour la filer aux Expl.
+
+Si la quantité de bouffe plantée n'a pas dépassé la limite alors Expl donne la bouffe à harv. pour planter 
+Sinon donner la bouffe à la base
+
+On plante entre 2 bases pour ne pas ecraser
+
+2 types de lanceurs: protecteur
+		     attaquant
+
