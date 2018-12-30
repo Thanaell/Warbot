@@ -9,11 +9,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 to green-team-ask-for-energy [ b n ]
-  ask b [ if (energy > 1000) [ give-energy myself n ]]
+  ;; TWEAKME seuil de générosité de la base
+  ask b [ if (energy > 10000) [ give-energy myself n ]]
 end
 
 ;;
-;; rentre à la base si le robot transporte plus de 1000 unités de nourriture ou si son énergie est inférieure à 500 ou si c'est un rocket-launcher qui n'a plus de missiles
+;; rentre à la base si le robot transporte plus de 1000 unités de nourriture ou si son énergie est inférieure à 500 ou si c'est un rocket-launcher qui n'a plus de missiles / fafs
 ;;
 to green-team-go-back-to-base
   ;; détermine la base la plus proche
@@ -25,12 +26,24 @@ to green-team-go-back-to-base
       [ 
         ;; dépose sa nourriture
         give-food b carrying-food?
-        ;; demande de l'énergie si il reste moins de 1000
-        if (energy < 1000) [ green-team-ask-for-energy b 300 ]
-        ;; demande de l'énergie pour créer 5 missiles
-        if ((Breed = RocketLaunchers) and (nb-missiles = 0)) [
-          green-team-ask-for-energy b 500
-          new-missile 5
+        
+        ;; TWEAKME toutes les valeurs d'énergies, seuils, nb de missiles / fafs
+        if (Breed = RocketLaunchers) [
+          if (energy < 1000) [ green-team-ask-for-energy b (4000 - energy) ]
+          if (nb-fafs < 2) [
+            green-team-ask-for-energy b (rocket-launcher-max-fafs * faf-cost)
+            new-faf rocket-launcher-max-fafs
+          ]
+          if (nb-missiles = 0) [
+            green-team-ask-for-energy b (100 * missile-cost)
+            new-missile 100
+          ]
+        ]
+        if (Breed = Harvesters) [
+          if (energy < 1000) [ green-team-ask-for-energy b (2000 - energy) ]
+        ]
+        if (Breed = Explorers) [
+          if (energy < 1000) [ green-team-ask-for-energy b (1500 - energy) ]
         ]
         set mem4 0
         ;; fait demi-tour
@@ -127,10 +140,11 @@ to green-team-select-target
   [
     ;; il essaye de percevoir un robot ennemi (le plus proche de lui)
     let h min-one-of perceive-robots2 ennemy1 ennemy2 [ distance myself ]
-    ;; si il en a vu un, il mémorise ses coordonnées et vérouille la cible
+    ;; si il en a vu un, il mémorise ses coordonnées et verrouille la cible
     ifelse ( h != nobody ) [
       set mem0 h
       set mem2 [breed] of h
+      ;; mem5 à 2 pour signifier qu'on connait la position de la cible => faf possible
       set mem5 2
     ]
     ;; sinon, il se dévérouille
@@ -138,14 +152,11 @@ to green-team-select-target
   ]
 end
 
-to green-team-shoot 
-  if (not green-team-no-target?)
-  [
-    ifelse (mem5 = 1)
-    [ launch-rocket towardsxy mem0 mem1 set mem5 0 ]
-    [ launch-faf mem0 set mem5 0 ]
-  ]
-  
+to green-team-shoot
+  if (mem5 = 1)
+  [ launch-rocket towardsxy mem0 mem1 set mem5 0 ]
+  if (mem5 = 2)
+  [ launch-faf mem0 set mem5 0 ]
 end
 
 to green-team-drive-harvesters
@@ -156,7 +167,7 @@ to green-team-drive-harvesters
 end
 
 to goGreenExplorer
-;  ifelse (carrying-food? > 1000) or (energy < 500) or ((Breed = RocketLaunchers) and (nb-missiles = 0))
+  ;; TWEAKME seuil de retour à la base Explorer
   ifelse (energy < 500)
   [ green-team-go-back-to-base ]
   [ green-team-go-and-eat ]
@@ -165,6 +176,7 @@ to goGreenExplorer
 
   ifelse (not green-team-no-target?) [
     green-team-call-rocket-launcher-xy mem0 mem1 mem2
+    ;; TWEAKME pertinence d'appeler un autre explorer ?
     green-team-call-explorer mem0 mem1 mem2
   ]
   [ let h one-of perceive-robots2 ennemy1 ennemy2
@@ -173,8 +185,8 @@ to goGreenExplorer
 end
 
 to goGreenRocketLauncher
-;  ifelse (carrying-food? > 1000) or (energy < 500) or ((Breed = RocketLaunchers) and (nb-missiles = 0))
-  ifelse (energy < 500) or (nb-missiles = 0)
+  ;; TWEAKME seuils de retour à la base RocketLauncher
+  ifelse (energy < 1000) or (nb-missiles = 0) or (nb-fafs = 0)
   [
     ;; rentre à la base si certaines conditions sont vérifiées
     green-team-go-back-to-base
@@ -188,25 +200,24 @@ to goGreenRocketLauncher
     ;; sinon tire
     [ green-team-shoot ]
   ]
-  
-  ;; crée un nouveau missile si plus de 3000 unités d'énergie
-  if ((energy > 3000) and (nb-missiles < 5)) [ new-missile 1 ]
 end
 
 to goGreenHarvester
-  ifelse (mem4 = 1) or (carrying-food? > 500) or (energy < 500)
+  ;; TWEAKME seuils de retour à la base Harvester
+  ifelse (mem4 = 1) or (carrying-food? > 1200) or (energy < 500)
   [
     ; retour à la base
     set mem4 1
     ;; rentre à la base si certaines conditions sont vérifiées
     green-team-go-back-to-base
+    ;; TWEAKME seuils d'envie soudaine d'agriculture
     if (energy > 500) and (carrying-food? > 500) [ 
       ;; détermine la distance de la base la plus proche
       ;; BUG CORRIGE
       let b min-one-of my-bases [ distance myself ]
       if (b != nobody) [
-        ;; si le robot est à moins de 10 de la base
-        if (distance b < 10)
+        ;; TWEAKME distance max de la base pour planter
+        if (distance b < 14)
           [ plant-seeds color max-seeds ]
       ]
     ]
@@ -218,7 +229,9 @@ to goGreenHarvester
 end
 
 to goGreenBase
-  if (nb-missiles < 10) and (energy > 1000) [ new-missile 50 ]
+  ;; TWEAKME tous les seuils et valeurs de construction
+  if (nb-fafs < 12) and (energy > 5000) [ new-faf 6 ]
+  ; if (nb-missiles < 10) and (energy > 1000) [ new-missile 50 ]
   if (energy > 12000) [ ifelse (random 5 = 0) [ new-Explorer 1 self ][ifelse (random 2 = 0) [ new-Harvester 1 self ][ new-RocketLauncher 1 self ]]]
   let t one-of perceive-specific-robots2 ennemy1 ennemy2 rocketlaunchers
     if (t != nobody) [
@@ -240,7 +253,8 @@ end
 
 ;; procedure pour initialiser les bases verts
 to initGreenBase
-  ; cré des explorers, des harvesters et des rocket-launchers
+  ;; TWEAKME spawns de départ
+  ;; crée des explorers, des harvesters et des rocket-launchers
   new-Explorer 2 self
   new-Harvester 5 self
   new-RocketLauncher 2 self
