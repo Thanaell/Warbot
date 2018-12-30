@@ -10,7 +10,21 @@
 
 to red-team-ask-for-energy [ b n ]
   ;; TWEAKME seuil de générosité de la base
-  ask b [ if (energy > 10000) [ give-energy myself n ]]
+  if (ticks < 3000) [
+    ifelse (breed = Harvesters)
+      [ ask b [ if (energy > 4000) [ give-energy myself n ]] ]
+      [ ask b [ if (energy > 12000) [ give-energy myself n ]] ]
+  ]
+  if (ticks >= 3000) and (ticks < 6000) [
+    ifelse (breed = Harvesters)
+      [ ask b [ if (energy > 4000) [ give-energy myself n ]] ]
+      [ ask b [ if (energy > 10000) [ give-energy myself n ]] ]
+  ]
+  if (ticks >= 6000) [
+    ifelse (breed = Harvesters)
+      [ ask b [ if (energy > 6000) [ give-energy myself n ]] ]
+      [ ask b [ if (energy > 10000) [ give-energy myself n ]] ]
+  ]
 end
 
 ;;
@@ -40,7 +54,11 @@ to red-team-go-back-to-base
           ]
         ]
         if (Breed = Harvesters) [
-          if (energy < 1000) [ red-team-ask-for-energy b (2000 - energy) ]
+          if (energy < 500) [
+            ifelse (mem3 = 42)
+              [ red-team-ask-for-energy b (2000 - energy) ]
+              [ red-team-ask-for-energy b (1000 - energy) ]
+          ]
         ]
         if (Breed = Explorers) [
           if (energy < 1000) [ red-team-ask-for-energy b (1500 - energy) ]
@@ -176,7 +194,6 @@ to goRedExplorer
 
   ifelse (not red-team-no-target?) [
     red-team-call-rocket-launcher-xy mem0 mem1 mem2
-    ;; TWEAKME pertinence d'appeler un autre explorer ?
     red-team-call-explorer mem0 mem1 mem2
   ]
   [ let h one-of perceive-robots2 ennemy1 ennemy2
@@ -203,8 +220,12 @@ to goRedRocketLauncher
 end
 
 to goRedHarvester
+  ;;TWEAKME Proportion de farmers (1337) et de cueilleurs (42)
+  if(mem3 != 42 and mem3 != 1337)[
+    ifelse(random 3 = 0)[set mem3 42][set mem3 1337]
+  ]
   ;; TWEAKME seuils de retour à la base Harvester
-  ifelse (mem4 = 1) or (carrying-food? > 1200) or (energy < 500)
+  ifelse (mem4 = 1) or (mem3 = 42 and carrying-food? > 1500) or (mem3 = 1337 and carrying-food? > 1000) or (energy < 400)
   [
     ; retour à la base
     set mem4 1
@@ -216,8 +237,11 @@ to goRedHarvester
       ;; BUG CORRIGE
       let b min-one-of my-bases [ distance myself ]
       if (b != nobody) [
-        ;; TWEAKME distance max de la base pour planter
-        if (distance b < 14)
+         ;; TWEAKME distance max de la base pour planter
+        let maxdistance 0
+        ifelse(ticks < 3000)[set maxdistance 14]
+        [ifelse (ticks < 6000)[set maxdistance 16][set maxdistance 18]] 
+        if (distance b < maxdistance)
           [ plant-seeds color max-seeds ]
       ]
     ]
@@ -234,23 +258,26 @@ to goRedBase
   
   ;; Variation de stratégie selon le nombre de ticks
   if (ticks < 3000) [
-    if (energy > 8000) [ new-Harvester 1 self ]
+    if (energy > 8000) [ 
+       new-Harvester 1 self
+    ]
   ]
   if (ticks >= 3000 and ticks < 6000) [
     if (energy > 12000) [
-      ;; Répartition : 1/5 explorer 2/5 harvester 2/5 rocketLauncher
-      ifelse (random 5 = 0)
-        [ new-Explorer 1 self ]
-        [ ifelse (random 2 = 0) [ new-Harvester 1 self ][ new-RocketLauncher 1 self ] ]
+      ;; Répartition :  2/5 harvester 3/5 rocketLauncher
+      let result random 5
+      ifelse (result = 0 or result = 1)
+        [ new-Harvester 1 self ]
+        [ new-RocketLauncher 1 self ]
     ]
   ]
   if (ticks >= 6000) [
     if (energy > 12000) [
-      ;; Répartition : 3/6 explorer 1/6 harvester 2/6 rocketLauncher
+      ;; Répartition : 3/6 rocketlauncher 1/6 explorer 2/6 harvester
       let randomResult (random 6)
       ifelse (randomResult < 3)
-        [ new-Explorer 1 self ]
-        [ ifelse (randomResult < 4) [ new-Harvester 1 self ][ new-RocketLauncher 1 self ] ]
+        [ new-RocketLauncher 1 self ]
+        [ ifelse (randomResult < 4) [ new-Explorer 1 self ][ new-Harvester 1 self ] ]
     ]
   ]
   let t one-of perceive-specific-robots2 ennemy1 ennemy2 rocketlaunchers
