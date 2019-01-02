@@ -9,11 +9,26 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 to blue-team-ask-for-energy [ b n ]
-  ask b [ if (energy > 1000) [ give-energy myself n ]]
+  ;; TWEAKME seuil de générosité de la base
+  if (ticks < 3000) [
+    ifelse (breed = Harvesters)
+      [ ask b [ if (energy > 4000) [ give-energy myself n ]] ]
+      [ ask b [ if (energy > 12000) [ give-energy myself n ]] ]
+  ]
+  if (ticks >= 3000) and (ticks < 6000) [
+    ifelse (breed = Harvesters)
+      [ ask b [ if (energy > 4000) [ give-energy myself n ]] ]
+      [ ask b [ if (energy > 10000) [ give-energy myself n ]] ]
+  ]
+  if (ticks >= 6000) [
+    ifelse (breed = Harvesters)
+      [ ask b [ if (energy > 6000) [ give-energy myself n ]] ]
+      [ ask b [ if (energy > 10000) [ give-energy myself n ]] ]
+  ]
 end
 
 ;;
-;; rentre à la base si le robot transporte plus de 1000 unités de nourriture ou si son énergie est inférieure à 500 ou si c'est un rocket-launcher qui n'a plus de missiles
+;; rentre à la base si le robot transporte plus de 1000 unités de nourriture ou si son énergie est inférieure à 500 ou si c'est un rocket-launcher qui n'a plus de missiles / fafs
 ;;
 to blue-team-go-back-to-base
   ;; détermine la base la plus proche
@@ -25,12 +40,28 @@ to blue-team-go-back-to-base
       [ 
         ;; dépose sa nourriture
         give-food b carrying-food?
-        ;; demande de l'énergie si il reste moins de 1000
-        if (energy < 1000) [ blue-team-ask-for-energy b 300 ]
-        ;; demande de l'énergie pour créer 5 missiles
-        if ((Breed = RocketLaunchers) and (nb-missiles = 0)) [
-          blue-team-ask-for-energy b 500
-          new-missile 5
+        
+        ;; TWEAKME toutes les valeurs d'énergies, seuils, nb de missiles / fafs
+        if (Breed = RocketLaunchers) [
+          if (energy < 1000) [ blue-team-ask-for-energy b (4000 - energy) ]
+          if (nb-fafs < 2) [
+            blue-team-ask-for-energy b (rocket-launcher-max-fafs * faf-cost)
+            new-faf rocket-launcher-max-fafs
+          ]
+          if (nb-missiles = 0) [
+            blue-team-ask-for-energy b (100 * missile-cost)
+            new-missile 100
+          ]
+        ]
+        if (Breed = Harvesters) [
+          if (energy < 500) [
+            ifelse (mem3 = 42)
+              [ blue-team-ask-for-energy b (2000 - energy) ]
+              [ blue-team-ask-for-energy b (1000 - energy) ]
+          ]
+        ]
+        if (Breed = Explorers) [
+          if (energy < 1000) [ blue-team-ask-for-energy b (1500 - energy) ]
         ]
         set mem4 0
         ;; fait demi-tour
@@ -127,10 +158,11 @@ to blue-team-select-target
   [
     ;; il essaye de percevoir un robot ennemi (le plus proche de lui)
     let h min-one-of perceive-robots2 ennemy1 ennemy2 [ distance myself ]
-    ;; si il en a vu un, il mémorise ses coordonnées et vérouille la cible
+    ;; si il en a vu un, il mémorise ses coordonnées et verrouille la cible
     ifelse ( h != nobody ) [
       set mem0 h
       set mem2 [breed] of h
+      ;; mem5 à 2 pour signifier qu'on connait la position de la cible => faf possible
       set mem5 2
     ]
     ;; sinon, il se dévérouille
@@ -138,14 +170,11 @@ to blue-team-select-target
   ]
 end
 
-to blue-team-shoot 
-  if (not blue-team-no-target?)
-  [
-    ifelse (mem5 = 1)
-    [ launch-rocket towardsxy mem0 mem1 set mem5 0 ]
-    [ launch-faf mem0 set mem5 0 ]
-  ]
-  
+to blue-team-shoot
+  if (mem5 = 1)
+  [ launch-rocket towardsxy mem0 mem1 set mem5 0 ]
+  if (mem5 = 2)
+  [ launch-faf mem0 set mem5 0 ]
 end
 
 to blue-team-drive-harvesters
@@ -156,7 +185,7 @@ to blue-team-drive-harvesters
 end
 
 to goBlueExplorer
-;  ifelse (carrying-food? > 1000) or (energy < 500) or ((Breed = RocketLaunchers) and (nb-missiles = 0))
+  ;; TWEAKME seuil de retour à la base Explorer
   ifelse (energy < 500)
   [ blue-team-go-back-to-base ]
   [ blue-team-go-and-eat ]
@@ -173,8 +202,8 @@ to goBlueExplorer
 end
 
 to goBlueRocketLauncher
-;  ifelse (carrying-food? > 1000) or (energy < 500) or ((Breed = RocketLaunchers) and (nb-missiles = 0))
-  ifelse (energy < 500) or (nb-missiles = 0)
+  ;; TWEAKME seuils de retour à la base RocketLauncher
+  ifelse (energy < 1000) or (nb-missiles = 0) or (nb-fafs = 0)
   [
     ;; rentre à la base si certaines conditions sont vérifiées
     blue-team-go-back-to-base
@@ -188,25 +217,31 @@ to goBlueRocketLauncher
     ;; sinon tire
     [ blue-team-shoot ]
   ]
-  
-  ;; crée un nouveau missile si plus de 3000 unités d'énergie
-  if ((energy > 3000) and (nb-missiles < 5)) [ new-missile 1 ]
 end
 
 to goBlueHarvester
-  ifelse (mem4 = 1) or (carrying-food? > 500) or (energy < 500)
+  ;;TWEAKME Proportion de farmers (1337) et de cueilleurs (42)
+  if(mem3 != 42 and mem3 != 1337)[
+    ifelse(random 3 = 0)[set mem3 42][set mem3 1337]
+  ]
+  ;; TWEAKME seuils de retour à la base Harvester
+  ifelse (mem4 = 1) or (mem3 = 42 and carrying-food? > 1500) or (mem3 = 1337 and carrying-food? > 1000) or (energy < 400)
   [
     ; retour à la base
     set mem4 1
     ;; rentre à la base si certaines conditions sont vérifiées
     blue-team-go-back-to-base
+    ;; TWEAKME seuils d'envie soudaine d'agriculture
     if (energy > 500) and (carrying-food? > 500) [ 
       ;; détermine la distance de la base la plus proche
       ;; BUG CORRIGE
       let b min-one-of my-bases [ distance myself ]
       if (b != nobody) [
-        ;; si le robot est à moins de 10 de la base
-        if (distance b < 10)
+         ;; TWEAKME distance max de la base pour planter
+        let maxdistance 0
+        ifelse(ticks < 3000)[set maxdistance 14]
+        [ifelse (ticks < 6000)[set maxdistance 16][set maxdistance 18]] 
+        if (distance b < maxdistance)
           [ plant-seeds color max-seeds ]
       ]
     ]
@@ -218,8 +253,33 @@ to goBlueHarvester
 end
 
 to goBlueBase
-  if (nb-missiles < 10) and (energy > 1000) [ new-missile 50 ]
-  if (energy > 12000) [ ifelse (random 5 = 0) [ new-Explorer 1 self ][ifelse (random 2 = 0) [ new-Harvester 1 self ][ new-RocketLauncher 1 self ]]]
+  ;; TWEAKME tous les seuils et valeurs de construction
+  if (nb-fafs < 12) and (energy > 5000) [ new-faf 6 ]
+  
+  ;; Variation de stratégie selon le nombre de ticks
+  if (ticks < 3000) [
+    if (energy > 8000) [ 
+       new-Harvester 1 self
+    ]
+  ]
+  if (ticks >= 3000 and ticks < 6000) [
+    if (energy > 12000) [
+      ;; Répartition :  2/5 harvester 3/5 rocketLauncher
+      let result random 5
+      ifelse (result = 0 or result = 1)
+        [ new-Harvester 1 self ]
+        [ new-RocketLauncher 1 self ]
+    ]
+  ]
+  if (ticks >= 6000) [
+    if (energy > 12000) [
+      ;; Répartition : 3/6 rocketlauncher 1/6 explorer 2/6 harvester
+      let randomResult (random 6)
+      ifelse (randomResult < 3)
+        [ new-RocketLauncher 1 self ]
+        [ ifelse (randomResult < 4) [ new-Explorer 1 self ][ new-Harvester 1 self ] ]
+    ]
+  ]
   let t one-of perceive-specific-robots2 ennemy1 ennemy2 rocketlaunchers
     if (t != nobody) [
       if (random 10 = 0) [launch-rocket towards t]
@@ -240,8 +300,9 @@ end
 
 ;; procedure pour initialiser les bases verts
 to initBlueBase
-  ; cré des explorers, des harvesters et des rocket-launchers
+  ;; TWEAKME spawns de départ
+  ;; crée des explorers, des harvesters et des rocket-launchers
   new-Explorer 2 self
-  new-Harvester 5 self
+  new-Harvester 8 self
   new-RocketLauncher 2 self
 end
