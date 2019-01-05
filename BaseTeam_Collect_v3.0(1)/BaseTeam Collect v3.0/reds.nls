@@ -1,14 +1,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; le code de l'equipe verte basique
-;; préfixe : red-team
+;; préfixe : raptobus-team
 ;;
 ;; mem0 et mem1 : coordonnees d'une cible
 ;; mem5 : indique si le robot a ou non une cible sélectionnée
 ;; mem4 : indique si un harvester est en mode retour à la base
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-to red-team-ask-for-energy [ b n ]
+to raptobus-team-ask-for-energy [ b n ]
   ;; TWEAKME seuil de générosité de la base
   if (ticks < 3000) [
     ifelse (breed = Harvesters)
@@ -30,7 +30,7 @@ end
 ;;
 ;; rentre à la base si le robot transporte plus de 1000 unités de nourriture ou si son énergie est inférieure à 500 ou si c'est un rocket-launcher qui n'a plus de missiles / fafs
 ;;
-to red-team-go-back-to-base
+to raptobus-team-go-back-to-base
   ;; détermine la base la plus proche
   let b min-one-of my-bases [ distance myself ]
   ;; BUG CORRIGE
@@ -43,25 +43,25 @@ to red-team-go-back-to-base
         
         ;; TWEAKME toutes les valeurs d'énergies, seuils, nb de missiles / fafs
         if (Breed = RocketLaunchers) [
-          if (energy < 1000) [ red-team-ask-for-energy b (4000 - energy) ]
+          if (energy < 1000) [ raptobus-team-ask-for-energy b (4000 - energy) ]
           if (nb-fafs < 2) [
-            red-team-ask-for-energy b (rocket-launcher-max-fafs * faf-cost)
+            raptobus-team-ask-for-energy b (rocket-launcher-max-fafs * faf-cost)
             new-faf rocket-launcher-max-fafs
           ]
           if (nb-missiles = 0) [
-            red-team-ask-for-energy b (100 * missile-cost)
+            raptobus-team-ask-for-energy b (100 * missile-cost)
             new-missile 100
           ]
         ]
         if (Breed = Harvesters) [
           if (energy < 500) [
             ifelse (mem3 = 42)
-              [ red-team-ask-for-energy b (2000 - energy) ]
-              [ red-team-ask-for-energy b (1000 - energy) ]
+              [ raptobus-team-ask-for-energy b (2000 - energy) ]
+              [ raptobus-team-ask-for-energy b (1000 - energy) ]
           ]
         ]
         if (Breed = Explorers) [
-          if (energy < 1000) [ red-team-ask-for-energy b (1500 - energy) ]
+          if (energy < 1000) [ raptobus-team-ask-for-energy b (1500 - energy) ]
         ]
         set mem4 0
         ;; fait demi-tour
@@ -77,13 +77,13 @@ to red-team-go-back-to-base
     ]    
 end
 
-to red-team-go-and-eat
+to raptobus-team-go-and-eat
   if ((breed = RocketLaunchers and (mem5 = 0)) or (breed = Explorers)) [
     random-move
   ]
 end
 
-to red-team-harvesters-go-and-eat
+to raptobus-team-harvesters-go-and-eat
   let b min-one-of perceive-food [ distance myself ]
   ifelse (b != nobody) [ 
     ifelse (distance b) <= 2
@@ -111,50 +111,50 @@ end
 ;; - 0 si le robot n'a pas de cible sélectionnée
 ;; - 1 si le robot a une cible sélectionnée
 ;;
-to-report red-team-no-target?
+to-report raptobus-team-no-target?
   report mem5 = 0
 end
 
-to red-team-set-target-xy [ x y espece ]
+to raptobus-team-set-target-xy [ x y espece ]
   set mem0 x set mem1 y set mem2 espece set mem5 1
 end
 
-to red-team-set-target-t [ t espece ]
+to raptobus-team-set-target-t [ t espece ]
   set mem0 t set mem2 espece set mem5 2
 end
 
-to red-team-set-food-target [ x y ]
-  if (red-team-no-target?) [ set mem0 x set mem1 y set mem5 1 ] 
+to raptobus-team-set-food-target [ x y ]
+  if (raptobus-team-no-target?) [ set mem0 x set mem1 y set mem5 1 ] 
 end
 
-to red-team-call-rocket-launcher-xy [ x y espece ]
+to raptobus-team-call-rocket-launcher-xy [ x y espece ]
   let rl min-one-of perceive-specific-robots color RocketLaunchers [ distancexy x y ]
-  if (rl != nobody) [ ask rl [ red-team-set-target-xy x y espece ]]
+  if (rl != nobody) [ ask rl [ raptobus-team-set-target-xy x y espece ]]
 end
 
-to red-team-call-rocket-launcher-t [ t espece ]
+to raptobus-team-call-rocket-launcher-t [ t espece ]
   let rl min-one-of perceive-specific-robots color RocketLaunchers [ distance t ]
-  if (rl != nobody) [ ask rl [ red-team-set-target-t t espece ]]
+  if (rl != nobody) [ ask rl [ raptobus-team-set-target-t t espece ]]
 end
 
-to red-team-call-explorer [ x y espece ]
+to raptobus-team-call-explorer [ x y espece ]
   let ex one-of perceive-specific-robots color Explorers
   if (ex != nobody) [
-    ask ex [ red-team-set-target-xy x y espece ]
+    ask ex [ raptobus-team-set-target-xy x y espece ]
   ]
 end
 
-to red-team-call-harvester [ x y ]
+to raptobus-team-call-harvester [ x y ]
   let h min-one-of perceive-specific-robots color harvesters [ distancexy x y ]
-  if (h != nobody) [ ask h [ red-team-set-food-target x y ]]
+  if (h != nobody) [ ask h [ raptobus-team-set-food-target x y ]]
 end
 
 ;;
 ;; essaye de sélectionner une cible à viser
 ;;
-to red-team-select-target
+to raptobus-team-select-target
   ;; si le robot n'a pas une base adverse comme cible
-  if (red-team-no-target?)
+  if (raptobus-team-no-target?)
   [
     ;; il essaye de percevoir un robot ennemi (le plus proche de lui)
     let h min-one-of perceive-robots2 ennemy1 ennemy2 [ distance myself ]
@@ -170,34 +170,34 @@ to red-team-select-target
   ]
 end
 
-to red-team-shoot
+to raptobus-team-shoot
   if (mem5 = 1)
   [ launch-rocket towardsxy mem0 mem1 set mem5 0 ]
   if (mem5 = 2)
   [ launch-faf mem0 set mem5 0 ]
 end
 
-to red-team-drive-harvesters
+to raptobus-team-drive-harvesters
   let food one-of perceive-food
   if (food != nobody) [
-    red-team-call-harvester [xcor] of food [ycor] of food 
+    raptobus-team-call-harvester [xcor] of food [ycor] of food 
   ]
 end
 
 to goRedExplorer
   ;; TWEAKME seuil de retour à la base Explorer
   ifelse (energy < 500)
-  [ red-team-go-back-to-base ]
-  [ red-team-go-and-eat ]
+  [ raptobus-team-go-back-to-base ]
+  [ raptobus-team-go-and-eat ]
   
-  red-team-drive-harvesters
+  raptobus-team-drive-harvesters
 
-  ifelse (not red-team-no-target?) [
-    red-team-call-rocket-launcher-xy mem0 mem1 mem2
-    red-team-call-explorer mem0 mem1 mem2
+  ifelse (not raptobus-team-no-target?) [
+    raptobus-team-call-rocket-launcher-xy mem0 mem1 mem2
+    raptobus-team-call-explorer mem0 mem1 mem2
   ]
   [ let h one-of perceive-robots2 ennemy1 ennemy2
-    if ( h != nobody ) [ red-team-call-rocket-launcher-t h [breed] of h]
+    if ( h != nobody ) [ raptobus-team-call-rocket-launcher-t h [breed] of h]
   ]
 end
 
@@ -206,16 +206,16 @@ to goRedRocketLauncher
   ifelse (energy < 1000) or (nb-missiles = 0) or (nb-fafs = 0)
   [
     ;; rentre à la base si certaines conditions sont vérifiées
-    red-team-go-back-to-base
+    raptobus-team-go-back-to-base
   ]
   [
     ;; sinon sélectionne une cible
-    red-team-select-target
-    ifelse (red-team-no-target?)
+    raptobus-team-select-target
+    ifelse (raptobus-team-no-target?)
     ;; si pas de cible, cherche à manger
-    [ red-team-go-and-eat ]
+    [ raptobus-team-go-and-eat ]
     ;; sinon tire
-    [ red-team-shoot ]
+    [ raptobus-team-shoot ]
   ]
 end
 
@@ -230,7 +230,7 @@ to goRedHarvester
     ; retour à la base
     set mem4 1
     ;; rentre à la base si certaines conditions sont vérifiées
-    red-team-go-back-to-base
+    raptobus-team-go-back-to-base
     ;; TWEAKME seuils d'envie soudaine d'agriculture
     if (energy > 500) and (carrying-food? > 500) [ 
       ;; détermine la distance de la base la plus proche
@@ -248,7 +248,7 @@ to goRedHarvester
   ]
   [
     ;; cherche à manger
-    red-team-harvesters-go-and-eat
+    raptobus-team-harvesters-go-and-eat
   ]
 end
 
